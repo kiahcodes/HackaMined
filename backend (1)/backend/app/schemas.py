@@ -12,3 +12,8 @@ class PredictWorker(BaseModel):
     gender: str
     department: str
     experience: int
+
+# class CourseRecommendationRequest(BaseModel):
+#     title: str
+#     city: str
+#     skills: str

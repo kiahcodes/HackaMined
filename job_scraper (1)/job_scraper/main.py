@@ -80,9 +80,20 @@ async def run_scraper(scraper_cls, keywords, cities, proxy_rotator, label: str, 
     """Instantiate and run one scraper inside its own context manager."""
     log.info("▶  Starting %s scraper", label)
     from scrapers.playwright_scraper import PlaywrightScraper
+
+    # Checkpoint: save to DB after every page so Ctrl+C doesn't lose data
+    async def checkpoint(jobs: List[Job]) -> None:
+        try:
+            df = Preprocessor().run(jobs)
+            if not df.empty:
+                Aggregator().run([df])
+                log.info("💾  Checkpoint saved %d jobs to DB", len(df))
+        except Exception as e:
+            log.warning("Checkpoint failed (non-fatal): %s", e)
+
     if issubclass(scraper_cls, PlaywrightScraper):
         async with scraper_cls(headless=headless) as scraper:
-            return await scraper.scrape_all(keywords, cities)
+            return await scraper.scrape_all(keywords, cities, checkpoint_callback=checkpoint)
     else:
         kwargs = {"proxy_rotator": proxy_rotator} if proxy_rotator else {}
         async with scraper_cls(**kwargs) as scraper:
@@ -125,7 +136,6 @@ async def main_async(args: argparse.Namespace) -> None:
         scraper_tasks.append(
             run_scraper(NaukriScraper, keywords, cities, None, "Naukri", headless=not args.show_browser)
         )
-
 
     if not scraper_tasks:
         log.error("All scrapers disabled — nothing to do. Remove --no-* flags.")

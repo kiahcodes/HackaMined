@@ -9,6 +9,8 @@ from app.services import (
     course_recommendations
 )
 from app.schemas import WorkerAnalysis, PredictWorker
+# from app.schemas import CourseRecommendationRequest
+
 
 router = APIRouter(prefix="/api")
 
@@ -42,6 +44,10 @@ def predict_worker(data: PredictWorker):
 def courses():
     return course_recommendations()
 
+# @router.post("/course-recommendations")
+# def courses(data: CourseRecommendationRequest):
+#     return course_recommendations()
+    
 @router.get("/job-impact")
 def impact(ai_level: int):
     return job_impact(ai_level)

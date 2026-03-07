@@ -373,12 +373,22 @@ class PlaywrightScraper:
 
     # ── orchestrator ──────────────────────────────────────────────────────
 
-    async def scrape_all(self, keywords: List[str], cities: List[str]) -> List[Job]:
+    async def scrape_all(
+        self,
+        keywords: List[str],
+        cities: List[str],
+        checkpoint_callback=None,   # called after every page with List[Job]
+    ) -> List[Job]:
+        """
+        checkpoint_callback: optional async function(jobs: List[Job]) → None
+        Called after every page so data can be saved mid-run.
+        If you press Ctrl+C, all data up to that point is already saved.
+        """
         urls = self.build_search_urls(keywords, cities)
         log.info("[%s] Starting Playwright scrape — %d URLs", self.SOURCE, len(urls))
         start = time.monotonic()
 
-        tasks  = [self._scrape_one(url) for url in urls]
+        tasks  = [self._scrape_one(url, checkpoint_callback) for url in urls]
         nested = await asyncio.gather(*tasks, return_exceptions=True)
 
         jobs: List[Job] = []
@@ -394,11 +404,17 @@ class PlaywrightScraper:
         log.info("[%s] Done — %d jobs, %d errors, %.1fs", self.SOURCE, len(jobs), errors, elapsed)
         return jobs
 
-    async def _scrape_one(self, url: str) -> List[Job]:
+    async def _scrape_one(self, url: str, checkpoint_callback=None) -> List[Job]:
         html = await self.fetch(url)
         if not html:
             return []
         jobs = await self.parse_listing_page(html, url)
         for job in jobs:
             job.compute_ai_mentions()
+        # Save immediately after each page
+        if jobs and checkpoint_callback:
+            try:
+                await checkpoint_callback(jobs)
+            except Exception as e:
+                log.warning("[%s] Checkpoint save failed (non-fatal): %s", self.SOURCE, e)
         return jobs
